@@ -71,7 +71,8 @@ syntax match fishSingleQuoteEscape "\\'" contained
 syntax region fishString matchgroup=fishOperator start=/"/ end=/"/ contains=fishVarDeref,fishSpecial,fishDoubleQuoteEscape
 syntax match fishDoubleQuoteEscape '\\"' contained
 syntax match fishNumber "\<[-+]\=\d\+\>"
-syntax cluster fishValues contains=fishVarDeref,fishString,fishNumber,fishVarDerefError
+syntax match fishHex "\<[-+]\=[0-9a-fA-F]\+\>"
+syntax cluster fishValues contains=fishVarDeref,fishString,fishNumber,fishHex,fishVarDerefError
 
 syntax region fishTest matchgroup=fishOperator start="\[" end="\]" end="\ze[;#]" excludenl end="$" contained contains=@fishTestContents
 syntax region fishTest matchgroup=fishKeyword start="\<test\>" end="\ze[;#]" excludenl end="$" contained contains=@fishTestContents
@@ -108,6 +109,8 @@ highlight default link fishString String
 highlight default link fishSingleQuoteEscape fishEscape
 highlight default link fishDoubleQuoteEscape fishEscape
 highlight default link fishNumber Number
+highlight default link fishHex Number
+
 
 highlight default link fishOperator Operator
 highlight default link fishRedirect fishOperator
