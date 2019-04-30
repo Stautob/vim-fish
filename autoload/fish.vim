@@ -7,10 +7,10 @@ function! fish#Indent()
     let l:indent = 0
     let l:prevline = getline(l:prevlnum)
     if l:prevline =~# '\v^\s*switch>'
-        let l:indent = l:shiftwidth * 2
+        let l:indent = l:indent + l:shiftwidth
     elseif l:prevline =~# '\v^\s*%(begin|if|else|while|for|function|case)>'
         let l:indent = l:shiftwidth
-    endif
+      endif
     let l:line = getline(v:lnum)
     if l:line =~# '\v^\s*end>'
         return indent(v:lnum) - (l:indent ==# 0 ? l:shiftwidth : l:indent)

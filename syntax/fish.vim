@@ -1,62 +1,105 @@
 if exists('b:current_syntax')
-    finish
+  finish
 endif
 
-syntax case match
+function! s:CreatePrivateKeyword (name, keyword, parent, hiGroup)
+  execute "syn keyword " . a:name  . " " . a:keyword . " contained containedin=" . a:parent
+  execute "hi link " . a:name . " " . a:hiGroup
+  execute "syn cluster c_private add=" . a:name
+endfunction
 
-"syntax cluster fishCommand contains=NONE
-"syntax match fishLineStart "\%(\\\@1<!\%(\\\\\)*\\\n\)\@<!\_^" nextgroup=@fishCommand skipwhite
+function! s:CreatePrivateKeywordWithError (name, keyword, parent, hiGroup)
+  execute "syn keyword err_" . a:name . " " . a:keyword
+  execute "hi default link err_" . a:name . " Error"
+  call s:CreatePrivateKeyword(a:name, a:keyword, a:parent, a:hiGroup)
+endfunction
+
+function! s:CreatePrivateMatch (name, pattern, parent, hiGroup)
+  execute "syn match " . a:name  . " \"" . a:pattern . "\" contained containedin=" . a:parent
+  execute "hi link " . a:name . " " . a:hiGroup
+  execute "syn cluster c_private add=" . a:name
+endfunction
+
+function! s:CreatePrivateMatchWithError (name, pattern, parent, hiGroup)
+  execute "syn match err_" . a:name . " \"" . a:pattern . "\""
+  execute "hi default link err_" . a:name . " Error"
+  call s:CreatePrivateMatch(a:name, a:pattern, a:parent, a:hiGroup)
+endfunction
+syn case match
+
+"syn cluster fishCommand contains=NONE
+"syn match fishLineStart "\%(\\\@1<!\%(\\\\\)*\\\n\)\@<!\_^" nextgroup=@fishCommand skipwhite
 
 
-"syntax match fishFunctionName "\v(\d|\w)+[^/]{-}(\n|;)" contained
+"syn match fishFunctionName "\v(\d|\w)+[^/]{-}(\n|;)" contained
 
-"syntax match fishAliasName "\v(\d|\w)+[^/]" nextgroup=
+"syn match fishAliasName "\v(\d|\w)+[^/]" nextgroup=
 
-"syntax keyword fishAliasDef alias nextgroup=fishAliasName skipwhite
+"syn keyword fishAliasDef alias nextgroup=fishAliasName skipwhite
 
-syntax match m_path "\v\/?\S+\/(\/|\S*)+"
+syn match m_path "\v\/?\S+\/(\/|\S*)+"
 highlight link m_path Directory
 
-syntax match m_bang "\v#\!" nextgroup=m_path
+syn match m_bang "\v#\!" nextgroup=m_path
 highlight link m_bang Macro
 
-" FUNCTIONS
-syntax cluster c_function contains=k_function,r_functionDef
-syntax region r_functionDef start="\v\s*function\s+" matchgroup=c_function end="end" keepend fold transparent contains=k_function
-syntax keyword k_function function contained containedin=r_functionDef
-
-highlight link k_function Function
-highlight link c_function Function
-
+" STANDALONE ENDS ARE ERRORS
+syn keyword k_standaloneEnd end
+hi default link k_standaloneEnd Error
 
 " LOOPS
-syntax cluster c_loops contains=r_forLoop,r_whileLoop
-syntax region r_forLoop matchgroup=c_loops start="for" end="end" keepend extend fold transparent contains=ALL
-syntax region r_whileLoop matchgroup=c_loops start="while" end="end" keepend extend fold transparent contains=ALL
+syn cluster c_loops contains=r_forLoop,r_whileLoop
+syn region r_forLoop matchgroup=c_loops start="\<for\>" end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
+syn region r_whileLoop matchgroup=c_loops start="\<while\>" end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
 
-highlight link c_loops Conditional
+highlight link c_loops Repeat
 
 
 " CONDITIONALS
-syntax cluster c_conditionals contains=r_ifStmt,k_elseStmt,r_switchStmt,k_caseStmt
-syntax keyword k_elseStmt else containedin=r_ifStmt
-highlight link k_elseStmt Conditional
-syntax region r_ifStmt matchgroup=c_conditionals start="\v\s?if\s+" end="end" keepend extend fold transparent contains=ALL
-syntax keyword k_caseStmt case containedin=r_switchStmt
-syntax region r_switchStmt matchgroup=c_conditionals start="\s?switch " end="\send\s?" keepend extend fold transparent contains=ALL
+call s:CreatePrivateMatchWithError("m_else", '\v<else\s+(if)@!>', "r_ifStmt", 'Conditional')
+call s:CreatePrivateMatchWithError("m_elseIf", '\v<else\s+if>', "r_ifStmt", "Conditional")
+syn region r_ifStmt matchgroup=Conditional start="\<if\>" end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private,err_m_else,err_m_elseIf
 
-highlight link c_conditionals Conditional
-
+" SWITCH
+call s:CreatePrivateKeywordWithError("k_case", "case", "r_switchStmt", "Conditional")
+syn region r_switchStmt matchgroup=Conditional start="\<switch\>" end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
 
 
 
+" FUNCTIONS
+call s:CreatePrivateMatchWithError('m_function', '\<function\>', 'r_functionDef', "Function")
+syn region r_functionDef start="\<function\>" matchgroup=c_function end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
+
+highlight link c_function Function
 
 
-"syntax keyword fishKeyword contained
+syn cluster c_strings contains=r_string
+syn region r_string start='"' end='"' contains=m_doubleQuoteEscape
+syn region r_string start="'" end="'" contains=m_singleQuoteEscape
+"hi default link r_string String
+
+syn cluster c_specialKey contains=m_singleQuoteEscape,m_doubleQuoteEscape
+syn match m_singleQuoteEscape "\\'" contained
+syn match m_doubleQuoteEscape '\\"' contained
+
+hi default link c_specialKey Special
+
+hi default link c_strings String
+
+
+syn keyword todos contained FIXME XXX TODO FIXME: XXX: TODO:
+hi default link todos Todo
+syn match comment "\v^\s*\%.*$" contains=todos
+hi default link comment Comment
+
+
+
+
+"syn keyword fishKeyword contained
 "            \ contains_seq delete-or-exit down-or-search
 "            \ fish_default_key_bindings grep la ll ls man nextd-or-forward-word
 "            \ N_ prevd-or-backward-word prompt_pwd seq setenv sgrep up-or-search
-"syntax keyword fishKeyword contained
+"syn keyword fishKeyword contained
 "            \ begin bg bind block break breakpoint builtin cd
 "            \ commandline complete \contains continue count dirh dirs echo emit
 "            \ eval exec exit fg fish fish_config fish_indent fish_pager
@@ -64,115 +107,115 @@ highlight link c_conditionals Conditional
 "            \ funcsave functions help history isatty jobs math mimedb
 "            \ nextd not open popd prevd psub pushd pwd random read return
 "            \ set_color source status trap type ulimit umask vared
-"syntax keyword fishFunctionDefs contained
+"syn keyword fishFunctionDefs contained
 "            \ abbr alias
-"syntax keyword fishKeyword command contained nextgroup=@fishCommand skipwhite
+"syn keyword fishKeyword command contained nextgroup=@fishCommand skipwhite
 "syn match fishKeyword "\.\ze\%(\s\|$\)" contained
 "syn cluster fishCommand add=fishKeyword
-"syntax keyword fishKeywordError do done then fi export local contained
+"syn keyword fishKeywordError do done then fi export local contained
 "syn cluster fishCommand add=fishKeywordError
 "
-"syntax keyword fishConditional if else switch or and not contained nextgroup=@fishCommand skipwhite
+"syn keyword fishConditional if else switch or and not contained nextgroup=@fishCommand skipwhite
 "syn cluster fishCommand add=fishConditional
-"syntax keyword fishRepeat while contained nextgroup=@fishCommand skipwhite
-"syntax keyword fishRepeat for contained nextgroup=fishRepeatForVar skipwhite
+"syn keyword fishRepeat while contained nextgroup=@fishCommand skipwhite
+"syn keyword fishRepeat for contained nextgroup=fishRepeatForVar skipwhite
 "syn cluster fishCommand add=fishRepeat
-"syntax region fishRepeatForVar start="\S" end="\ze\%(\s\|;\|$\)" contained contains=@fishValues,@fishEscapeSeqs nextgroup=fishRepeatIn skipwhite
-"syntax keyword fishRepeatIn in contained
-"syntax keyword fishLabel case contained
+"syn region fishRepeatForVar start="\S" end="\ze\%(\s\|;\|$\)" contained contains=@fishValues,@fishEscapeSeqs nextgroup=fishRepeatIn skipwhite
+"syn keyword fishRepeatIn in contained
+"syn keyword fishLabel case contained
 "syn cluster fishCommand add=fishLabel
 "
-"syntax match fishOperator "[*?]"
-"syntax match fishOperator "[;&]" nextgroup=@fishCommand skipwhite
+"syn match fishOperator "[*?]"
+"syn match fishOperator "[;&]" nextgroup=@fishCommand skipwhite
 "
-"syntax region fishSubst matchgroup=fishOperator start="(" end=")" excludenl end="$" contains=TOP
-"syntax match fishSubstStart "\ze." contained containedin=fishSubst nextgroup=@fishCommand skipwhite
-"syntax region fishBrace matchgroup=fishOperator start="{" end="}" excludenl end="$" contains=TOP
-"syntax match fishRedirect "\d\=\(>>\?\|<\|\^\^\?\)\(&\(-\|\d\)\)\="
-"syntax match fishPipe "\(\d>\)\=|" nextgroup=@fishCommand skipwhite skipnl
+"syn region fishSubst matchgroup=fishOperator start="(" end=")" excludenl end="$" contains=TOP
+"syn match fishSubstStart "\ze." contained containedin=fishSubst nextgroup=@fishCommand skipwhite
+"syn region fishBrace matchgroup=fishOperator start="{" end="}" excludenl end="$" contains=TOP
+"syn match fishRedirect "\d\=\(>>\?\|<\|\^\^\?\)\(&\(-\|\d\)\)\="
+"syn match fishPipe "\(\d>\)\=|" nextgroup=@fishCommand skipwhite skipnl
 "
-"syntax match fishComment excludenl "#.*$" contains=fishTodo
-"syntax match fishComment "#.*\\\@1<!\%(\\\\\)*\\$" contains=fishTodo,fishCommentEscape nextgroup=@fishCommand skipwhite
-"syntax keyword fishTodo contained TODO FIXME
-"syntax match fishCommentEscape "\\\n" contained
+"syn match fishComment excludenl "#.*$" contains=fishTodo
+"syn match fishComment "#.*\\\@1<!\%(\\\\\)*\\$" contains=fishTodo,fishCommentEscape nextgroup=@fishCommand skipwhite
+"syn keyword fishTodo contained TODO FIXME
+"syn match fishCommentEscape "\\\n" contained
 "
-"syntax match fishSpecial "\\[abefnrtv$\\]" "these must be escaped in and out of quoted strings
-"syntax match fishEscape ,\\[{}[\]()&;| *?~%#<>^"'\n], "these are not escaped in strings
-"syntax match fishNumEscape "\\\(\d\d\d\|[xX]\x\x\|u\x\x\x\x\(\x\x\x\x\)\?\|c\a\)"
-"syntax cluster fishEscapeSeqs contains=fishSpecial,fishEscape,fishNumEscape
+"syn match fishSpecial "\\[abefnrtv$\\]" "these must be escaped in and out of quoted strings
+"syn match fishEscape ,\\[{}[\]()&;| *?~%#<>^"'\n], "these are not escaped in strings
+"syn match fishNumEscape "\\\(\d\d\d\|[xX]\x\x\|u\x\x\x\x\(\x\x\x\x\)\?\|c\a\)"
+"syn cluster fishEscapeSeqs contains=fishSpecial,fishEscape,fishNumEscape
 "
-"syntax match fishSet "\<set\>\ze\%(\s\|;\|$\)" contained nextgroup=fishSetOpt,fishSetIdentifier skipwhite
+"syn match fishSet "\<set\>\ze\%(\s\|;\|$\)" contained nextgroup=fishSetOpt,fishSetIdentifier skipwhite
 "syn cluster fishCommand add=fishSet
-"syntax region fishSetIdentifier start="\S" end="\ze\%(\s\|;\|$\)" contained contains=@fishValues,@fishEscapeSeqs
-"syntax match fishSetOpt contained "-[eglLnquUx]\+\ze\%(\s\|;\|$\)" nextgroup=fishSetOpt,fishSetIdentifier skipwhite
-"syntax match fishSetOpt contained "--\(local\|global\|universal\|names\|\(un\)\=export\|erase\|query\|long\)\ze\%(\s\|;\|$\)" nextgroup=fishSetOpt,fishSetIdentifier skipwhite
-"syntax match fishSetOpt contained "--\ze\%(\s\|;\|$\)" nextgroup=fishSetIdentifier skipwhite
+"syn region fishSetIdentifier start="\S" end="\ze\%(\s\|;\|$\)" contained contains=@fishValues,@fishEscapeSeqs
+"syn match fishSetOpt contained "-[eglLnquUx]\+\ze\%(\s\|;\|$\)" nextgroup=fishSetOpt,fishSetIdentifier skipwhite
+"syn match fishSetOpt contained "--\(local\|global\|universal\|names\|\(un\)\=export\|erase\|query\|long\)\ze\%(\s\|;\|$\)" nextgroup=fishSetOpt,fishSetIdentifier skipwhite
+"syn match fishSetOpt contained "--\ze\%(\s\|;\|$\)" nextgroup=fishSetIdentifier skipwhite
 "
-"syntax match fishVarDerefError "\$[-#@*$?!]" " special variables
-"syntax region fishVarDerefError start="\${" end="}" " safe dereferencing
-"syntax region fishVarDerefError start="\$(" end=")" " var substitution
-"syntax match fishVarDeref "\$\+\w\+" " NB: $$foo is allowed: multiple deref
-"syntax region fishVarDeref start="\$\+\w\+\[" end="]" excludenl end="$" contains=fishSubst,fishVarDeref,@fishEscapeSeqs
-"syntax region fishString matchgroup=fishOperator start=/'/ end=/'/ contains=fishSpecial,fishSingleQuoteEscape
-"syntax match fishSingleQuoteEscape "\\'" contained
-"syntax region fishString matchgroup=fishOperator start=/"/ end=/"/ contains=fishVarDeref,fishSpecial,fishDoubleQuoteEscape
-"syntax match fishDoubleQuoteEscape '\\"' contained
-"syntax match fishNumber "\<[-+]\=\d\+\>"
-"syntax match fishHex "\<[-+]\=[0-9a-fA-F]\+\>"
-"syntax cluster fishValues contains=fishVarDeref,fishString,fishNumber,fishHex,fishVarDerefError
+"syn match fishVarDerefError "\$[-#@*$?!]" " special variables
+"syn region fishVarDerefError start="\${" end="}" " safe dereferencing
+"syn region fishVarDerefError start="\$(" end=")" " var substitution
+"syn match fishVarDeref "\$\+\w\+" " NB: $$foo is allowed: multiple deref
+"syn region fishVarDeref start="\$\+\w\+\[" end="]" excludenl end="$" contains=fishSubst,fishVarDeref,@fishEscapeSeqs
+"syn region fishString matchgroup=fishOperator start=/'/ end=/'/ contains=fishSpecial,fishSingleQuoteEscape
+"syn match fishSingleQuoteEscape "\\'" contained
+"syn region fishString matchgroup=fishOperator start=/"/ end=/"/ contains=fishVarDeref,fishSpecial,fishDoubleQuoteEscape
+"syn match fishDoubleQuoteEscape '\\"' contained
+"syn match fishNumber "\<[-+]\=\d\+\>"
+"syn match fishHex "\<[-+]\=[0-9a-fA-F]\+\>"
+"syn cluster fishValues contains=fishVarDeref,fishString,fishNumber,fishHex,fishVarDerefError
 "
-"syntax region fishTest matchgroup=fishOperator start="\[" end="\]" end="\ze[;#]" excludenl end="$" contained contains=@fishTestContents
-"syntax region fishTest matchgroup=fishKeyword start="\<test\>" end="\ze[;#]" excludenl end="$" contained contains=@fishTestContents
+"syn region fishTest matchgroup=fishOperator start="\[" end="\]" end="\ze[;#]" excludenl end="$" contained contains=@fishTestContents
+"syn region fishTest matchgroup=fishKeyword start="\<test\>" end="\ze[;#]" excludenl end="$" contained contains=@fishTestContents
 "syn cluster fishCommand add=fishTest
-"syntax match fishTestOp contained "\s\@1<=-[a-hnoprstuwxzLS]\>"
-"syntax match fishTestOp contained "\s\@1<=-\%(eq\|ne\|ge\|gt\|le\|lt\)\>"
-"syntax match fishTestOp contained excludenl "\s\@1<=\%(!=\|!\|=\)\%($\|\s\@=\)"
-"syntax cluster fishTestContents contains=fishTestOp,fishSubst,fishOpError,fishTestOpError,@fishEscapeSeqs,@fishValues
-"syntax match fishTestOpError contained excludenl "\s\@1<=\%(==\|>\|<\)\%($\|\s\@=\)"
+"syn match fishTestOp contained "\s\@1<=-[a-hnoprstuwxzLS]\>"
+"syn match fishTestOp contained "\s\@1<=-\%(eq\|ne\|ge\|gt\|le\|lt\)\>"
+"syn match fishTestOp contained excludenl "\s\@1<=\%(!=\|!\|=\)\%($\|\s\@=\)"
+"syn cluster fishTestContents contains=fishTestOp,fishSubst,fishOpError,fishTestOpError,@fishEscapeSeqs,@fishValues
+"syn match fishTestOpError contained excludenl "\s\@1<=\%(==\|>\|<\)\%($\|\s\@=\)"
 "
 "" Some sequences used in Bourne-like shells, but not fish
-"syntax match fishOpError "==\|&&\|||\|!!\|\[\[\|]]" "syntax
+"syn match fishOpError "==\|&&\|||\|!!\|\[\[\|]]" "syn
 "
-"highlight default link fishKeyword Keyword
-"highlight default link fishConditional Conditional
-"highlight default link fishRepeat Repeat
-"highlight default link fishRepeatForVar fishSetIdentifier
-"highlight default link fishRepeatIn Repeat
-"highlight default link fishLabel Label
+"hi default link fishKeyword Keyword
+"hi default link fishConditional Conditional
+"hi default link fishRepeat Repeat
+"hi default link fishRepeatForVar fishSetIdentifier
+"hi default link fishRepeatIn Repeat
+"hi default link fishLabel Label
 "
-"highlight default link fishFunctionDef Function
+"hi default link fishFunctionDef Function
 "
-"highlight default link fishComment Comment
-"highlight default link fishTodo Todo
+"hi default link fishComment Comment
+"hi default link fishTodo Todo
 "
-"highlight default link fishEscape Special
-"highlight default link fishSpecial fishEscape
-"highlight default link fishNumEscape fishEscape
-"highlight default link fishCommentEscape fishEscape
+"hi default link fishEscape Special
+"hi default link fishSpecial fishEscape
+"hi default link fishNumEscape fishEscape
+"hi default link fishCommentEscape fishEscape
 "
-"highlight default link fishSet Keyword
-"highlight default link fishSetOpt Operator
-"highlight default link fishSetIdentifier Identifier
-"highlight default link fishVarDeref Identifier
-"highlight default link fishString String
-"highlight default link fishSingleQuoteEscape fishEscape
-"highlight default link fishDoubleQuoteEscape fishEscape
-"highlight default link fishNumber Number
-"highlight default link fishHex Number
+"hi default link fishSet Keyword
+"hi default link fishSetOpt Operator
+"hi default link fishSetIdentifier Identifier
+"hi default link fishVarDeref Identifier
+"hi default link fishString String
+"hi default link fishSingleQuoteEscape fishEscape
+"hi default link fishDoubleQuoteEscape fishEscape
+"hi default link fishNumber Number
+"hi default link fishHex Number
 "
 "
-"highlight default link fishOperator Operator
-"highlight default link fishRedirect fishOperator
-"highlight default link fishPipe fishOperator
+"hi default link fishOperator Operator
+"hi default link fishRedirect fishOperator
+"hi default link fishPipe fishOperator
 "
-"highlight default link fishTestOp Operator
+"hi default link fishTestOp Operator
 "
-"highlight default link fishError Error
-"highlight default link fishKeywordError fishError
-"highlight default link fishOpError fishError
-"highlight default link fishVarDerefError fishError
+"hi default link fishError Error
+"hi default link fishKeywordError fishError
+"hi default link fishOpError fishError
+"hi default link fishVarDerefError fishError
 
 syn sync minlines=50
 syn sync maxlines=500
 
-let b:current_syntax = 'fish'
+let b:current_syn = 'fish'
