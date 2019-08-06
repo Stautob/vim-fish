@@ -40,25 +40,34 @@ syn case match
 syn match m_path "\v\/?\S+\/(\/|\S*)+"
 highlight link m_path Directory
 
-syn match m_bang "\v#\!" nextgroup=m_path
-highlight link m_bang Macro
+
+" FISH OPT IN/OPT OUT FEATURE AS ERROR
+" TODO
+
+
 
 " STANDALONE ENDS ARE ERRORS
 syn keyword k_standaloneEnd end
 hi default link k_standaloneEnd Error
 
-" LOOPS
-syn cluster c_loops contains=r_forLoop,r_whileLoop
-syn region r_forLoop matchgroup=c_loops start="\<for\>" end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
-syn region r_whileLoop matchgroup=c_loops start="\<while\>" end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
 
-highlight link c_loops Repeat
+" KEYWORDS FROM BASH
+syn keyword err_k_bash do done then fi export local
+hi default link err_k_bash Error
+
+
+" LOOPS
+syn region r_forLoop matchgroup=Repeat start="\<for\>" end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
+syn region r_whileLoop matchgroup=Repeat start="\<while\>" end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
 
 
 " CONDITIONALS
-call s:CreatePrivateMatchWithError("m_else", '\v<else\s+(if)@!>', "r_ifStmt", 'Conditional')
+call s:CreatePrivateMatchWithError("m_if", '\v<if>', "r_ifStmt", "Conditional")
+call s:CreatePrivateMatchWithError("m_else", '\v<else>(if)@!', "r_ifStmt", "Conditional")
 call s:CreatePrivateMatchWithError("m_elseIf", '\v<else\s+if>', "r_ifStmt", "Conditional")
-syn region r_ifStmt matchgroup=Conditional start="\<if\>" end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private,err_m_else,err_m_elseIf
+syn region r_ifStmt start="\<if\>" matchgroup=Conditional end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
+
+
 
 " SWITCH
 call s:CreatePrivateKeywordWithError("k_case", "case", "r_switchStmt", "Conditional")
@@ -67,30 +76,99 @@ syn region r_switchStmt matchgroup=Conditional start="\<switch\>" end="\<end\>" 
 
 
 " FUNCTIONS
-call s:CreatePrivateMatchWithError('m_function', '\<function\>', 'r_functionDef', "Function")
-syn region r_functionDef start="\<function\>" matchgroup=c_function end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
 
-highlight link c_function Function
+" matches valid function names
+syn cluster c_funName add=m_funName
+syn cluster c_private add=m_funName
+syn match m_funName :\v(function\s+)@<=[^-/][^/]{-}($|;|\s+)@=: contained containedin=m_funSignature
+syn match m_funName :\v(function\s+)@<="[^-/][^/]*": contained containedin=m_funSignature
+syn match m_funName :\v(function\s+)@<='[^-/][^/]*': contained containedin=m_funSignature
+hi default link m_funName Identifier
+
+" matches invalid function names
+syn cluster c_funName add=err_m_funName
+syn cluster c_private add=err_m_funName
+syn match err_m_funName :\v(function\s+)@<=(-.{-}|/=\S{-}/\S{-})($|;|\s+)@=: contained containedin=m_funSignature
+syn match err_m_funName :\v(function\s+)@<="(-.{-}|/=.{-}/.{-})": contained containedin=m_funSignature
+syn match err_m_funName :\v(function\s+)@<='(-.{-}|/=.{-}/.{-})': contained containedin=m_funSignature
+hi default link err_m_funName Error
+
+syn cluster c_private add=m_funDescription
+syn match m_funDescription :\v(\s+)@<=(-d|--description=)\s+(".{-}"|'.{-}'): contained containedin=m_funSignature contains=r_string nextgroup=m_funArgument
+hi default link m_funDescription Type
+
+syn cluster c_argName add=m_argName
+syn cluster c_private add=m_argName
+syn match m_argName :\v(\s+)@<=[a-zA-Z0-9_]*: contained containedin=m_funArgument
+hi default link m_argName Identifier
+
+syn match m_funArgument :\v(\s+)@<=(-a|--argument-names=\s+)([a-zA-Z0-9_]*\s+)+: contained containedin=m_funSignature contains=m_argName nextgroup=m_funDescription
+hi default link m_funArgument Type
+
+" matches function signature
+syn cluster c_private add=m_funSignature
+syn match m_funSignature '\v<function>.{-}($|;)@='he=s+8 contained contains=c_funName,m_funArgument,m_funDescription containedin=r_functionDef nextgroup=@c_funName
+hi link m_funSignature Function
+
+" matches whole function definition
+syn region r_functionDef start="\v<function>" matchgroup=Function end="\<end\>" keepend extend fold transparent contains=ALLBUT,@c_private
 
 
-syn cluster c_strings contains=r_string
-syn region r_string start='"' end='"' contains=m_doubleQuoteEscape
-syn region r_string start="'" end="'" contains=m_singleQuoteEscape
-"hi default link r_string String
 
-syn cluster c_specialKey contains=m_singleQuoteEscape,m_doubleQuoteEscape
+" STRINGS
+
+syn region r_string start='"' end='"' extend fold contains=m_doubleQuoteEscape,m_variable
+syn region r_string start="'" end="'" extend fold contains=m_singleQuoteEscape
+hi default link r_string String
+
+" matches string escapes
 syn match m_singleQuoteEscape "\\'" contained
+hi link m_singleQuoteEscape Special
 syn match m_doubleQuoteEscape '\\"' contained
-
-hi default link c_specialKey Special
-
-hi default link c_strings String
+hi link m_doubleQuoteEscape Special
 
 
-syn keyword todos contained FIXME XXX TODO FIXME: XXX: TODO:
-hi default link todos Todo
-syn match comment "\v^\s*\%.*$" contains=todos
-hi default link comment Comment
+" ARRAY INDEX
+" matches [-22..33] [+2..34] [12]
+syn match m_arrayIndex "\[[\+-]=\d+(..[\+-]=\d+)=\]" contained
+hi default link m_arrayIndex Operator
+
+" GUARDED VAR DEREF
+" matches {$foo} {$foo[-1]} {$foo[+1..2]}
+syn match m_guardedVar "\v\{\$+\w*(\[[\+-]=\d+(..[\+-]=\d+)=\])=\}" contains=m_arrayIndex
+hi default link m_guardedVar Identifier
+
+" VAR DEREF
+" matches $foo $foo[-1] $$foo[+1..2]
+syn match m_variable "\v\$+\w*(\[[\+-]=\d+(..[\+-]=\d+)=\])=" contains=m_arrayIndex
+hi default link m_variable Identifier
+
+
+" COMMENTS
+syn keyword k_todos contained FIXME XXX TODO FIXME: XXX: TODO:
+hi default link k_todos Todo
+syn match m_comment "\v^\s*\#.*$" contains=k_todos
+hi default link m_comment Comment
+
+" matches shebang
+syn match m_bang "\v#\!" nextgroup=m_path
+hi default link m_bang Macro
+
+
+" ARGUMENT
+syn cluster c_argument contains=r_string
+
+syn match m_varDerefError "\$[-#@*$?!]"
+syn region err_r_varDeref start="\${" end="}"
+syn region err_r_varDeref start="\$(" end=")"
+hi default link err_r_varDeref Error
+
+"syn match fishVarDeref "\$\+\w\+" " NB: $$foo is allowed: multiple deref
+syn region fishVarDeref start="\$\+\w\+\[" end="]" excludenl end="$" contains=fishSubst,fishVarDeref,@fishEscapeSeqs
+
+syn match m_redirect "\v\d=(\>\>=|\<)(\&\d)="
+hi default link m_redirect Operator
+
 
 
 
@@ -131,14 +209,10 @@ hi default link comment Comment
 "syn region fishSubst matchgroup=fishOperator start="(" end=")" excludenl end="$" contains=TOP
 "syn match fishSubstStart "\ze." contained containedin=fishSubst nextgroup=@fishCommand skipwhite
 "syn region fishBrace matchgroup=fishOperator start="{" end="}" excludenl end="$" contains=TOP
-"syn match fishRedirect "\d\=\(>>\?\|<\|\^\^\?\)\(&\(-\|\d\)\)\="
 "syn match fishPipe "\(\d>\)\=|" nextgroup=@fishCommand skipwhite skipnl
 "
 "syn match fishComment excludenl "#.*$" contains=fishTodo
 "syn match fishComment "#.*\\\@1<!\%(\\\\\)*\\$" contains=fishTodo,fishCommentEscape nextgroup=@fishCommand skipwhite
-"syn keyword fishTodo contained TODO FIXME
-"syn match fishCommentEscape "\\\n" contained
-"
 "syn match fishSpecial "\\[abefnrtv$\\]" "these must be escaped in and out of quoted strings
 "syn match fishEscape ,\\[{}[\]()&;| *?~%#<>^"'\n], "these are not escaped in strings
 "syn match fishNumEscape "\\\(\d\d\d\|[xX]\x\x\|u\x\x\x\x\(\x\x\x\x\)\?\|c\a\)"
@@ -205,7 +279,6 @@ hi default link comment Comment
 "
 "
 "hi default link fishOperator Operator
-"hi default link fishRedirect fishOperator
 "hi default link fishPipe fishOperator
 "
 "hi default link fishTestOp Operator
